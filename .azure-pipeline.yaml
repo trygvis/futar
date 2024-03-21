@@ -47,5 +47,5 @@ steps:
   - task: Docker@2
     inputs:
       repository: $(imageName)
-      command: build
-      Dockerfile: Dockerfile
+      command: buildAndPush
+      containerRegistry: trumfops
