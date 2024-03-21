@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/labstack/gommon/log"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -59,7 +59,7 @@ func main() {
 	}
 	RegisterHandlers(e, &server)
 
-	log.Info("Application is starting")
+	slog.Info("Application is starting")
 	time.AfterFunc(time.Duration(startupDelay)*time.Millisecond, func() {
 		server.markReady()
 	})

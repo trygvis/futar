@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/gommon/log"
+	"log/slog"
 	"net/http"
 )
 
@@ -14,7 +14,7 @@ type FutarServer struct {
 }
 
 func (d *FutarServer) markReady() {
-	log.Info("Application is ready")
+	slog.Info("Application is ready")
 	d.ready = true
 }
 
