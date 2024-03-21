@@ -1,4 +1,6 @@
-all: server-api.gen.go
+all: futar
+
+futar: server-api.gen.go
 	go build
 
 clean:

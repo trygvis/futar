@@ -1,4 +1,4 @@
-module trinfra-demo-container-app
+module futar
 
 go 1.22
 
