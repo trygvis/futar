@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -euo pipefail
+
+v="2.1.0"
+
+basedir="${0%/*}"
+self="${0##*/}"
+
+GOBIN="$(pwd)/$basedir/.gobin"
+export GOBIN
+
+bin="$GOBIN/$self"
+
+if [[ ! -x $bin ]]
+then
+  go install "github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v$v"
+fi
+
+exec "$bin" "${@}"

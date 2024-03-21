@@ -1,0 +1,5 @@
+package: main
+generate:
+  - models
+  - server
+output: server-api.gen.go

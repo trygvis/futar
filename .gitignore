@@ -1,0 +1,4 @@
+bin/.*
+*.tmp.*
+*.gen.*
+trinfra-demo-container-app
