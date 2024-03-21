@@ -1,8 +1,12 @@
 all: futar
 
-futar: server-api.gen.go $(wildcard *.go)
+futar: $(wildcard *.go) gen
 	go build
 
+.PHONY: gen
+gen: server-api.gen.go
+
+.PHONY: clean
 clean:
 	rm -f server-api.gen.go
 

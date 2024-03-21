@@ -25,6 +25,11 @@ steps:
       workingDirectory: '$(System.DefaultWorkingDirectory)'
       command: 'get'
       arguments: '-d'
+  - task: Bash@3
+    inputs:
+      scriptType: inline
+      script: |
+        make gen
   - task: Go@0
     inputs:
       workingDirectory: '$(System.DefaultWorkingDirectory)'
