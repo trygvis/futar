@@ -27,7 +27,7 @@ steps:
       arguments: '-d'
   - task: Bash@3
     inputs:
-      scriptType: inline
+      targetType: 'inline'
       script: |
         make gen
   - task: Go@0
