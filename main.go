@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/labstack/gommon/log"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -12,53 +11,36 @@ import (
 
 var startupDelay int64 = 1000
 
-type DemoServer struct {
-	ready       bool
-	environment string
-	serviceName string
-}
-
-func (d *DemoServer) markReady() {
-	log.Info("Application is ready")
-	d.ready = true
-}
-
-func (d *DemoServer) HelloWorld(c echo.Context) error {
-	return c.String(http.StatusOK, "Hello, World!")
-}
-
-func (d *DemoServer) MetaHealth(ctx echo.Context) error {
-	message := "OK!"
-	name := "demo"
-	status := Ok
-
-	checks := []ServiceHealthCheck{
-		{
-			Message: &message,
-			Name:    &name,
-			Status:  &status,
-		},
-	}
-	return ctx.JSON(200, ServiceHealth{
-		Checks:          &checks,
-		EnvironmentName: &d.environment,
-		ServiceName:     &d.serviceName,
-	})
-}
-
-func (d *DemoServer) MetaReady(ctx echo.Context) error {
-	if d.ready {
-		return ctx.String(200, "ready\n")
-	}
-
-	return ctx.String(503, "not ready\n")
-}
+var version = ""
+var date = ""
+var commit = ""
 
 func main() {
+	var v string
+	//goland:noinspection GoBoolExpressions
+	if len(version) > 0 {
+		v = version
+	} else {
+		v = "local"
+
+		if len(date) > 0 {
+			v += ", date=" + date
+		}
+
+		if len(commit) > 0 {
+			v += ", git=" + commit
+		}
+	}
+
 	var err error
 	port, _ := os.LookupEnv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	env, _ := os.LookupEnv("ENV")
+	if env == "" {
+		env = "local"
 	}
 
 	startupDelayS, _ := os.LookupEnv("STARTUP_DELAY")
@@ -70,7 +52,11 @@ func main() {
 	}
 
 	e := echo.New()
-	server := DemoServer{}
+	server := FutarServer{
+		version:     v,
+		serviceName: "futar",
+		environment: env,
+	}
 	RegisterHandlers(e, &server)
 
 	log.Info("Application is starting")

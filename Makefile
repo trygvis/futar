@@ -1,6 +1,6 @@
 all: futar
 
-futar: server-api.gen.go
+futar: server-api.gen.go $(wildcard *.go)
 	go build
 
 clean:
