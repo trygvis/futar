@@ -49,3 +49,6 @@ steps:
       repository: $(imageName)
       command: buildAndPush
       containerRegistry: DevOps_trumfops_ContainerRegistry
+      tags: |
+        $(Build.BuildId)
+        latest
