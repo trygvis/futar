@@ -2,7 +2,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  imageName: futar
+  imageName: futar:latest
   DOCKER_BUILDKIT: 1
 
 steps:
