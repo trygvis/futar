@@ -22,13 +22,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5.5.1
         with:
-          images: my-docker-hub-namespace/my-docker-hub-repository
+          images: ghcr.io/trygvis/futar
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5.3.0
         with:
           context: .
-          file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
