@@ -2,8 +2,8 @@
 
 FROM golang:1.22.0
 
-COPY --parents bin/oapi-codegen bin/
-RUN bin/oapi-codegen || true
+COPY bin/* ./bin/
+RUN bin/oapi-codegen --version
 
 COPY --parents * ./
 RUN make
