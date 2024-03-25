@@ -19,7 +19,7 @@ func (d *FutarServer) markReady() {
 }
 
 func (d *FutarServer) HelloWorld(c echo.Context) error {
-	return c.String(http.StatusOK, "Hello, World!")
+	return c.String(http.StatusOK, "Hello, World!\n")
 }
 
 func (d *FutarServer) MetaHealth(ctx echo.Context) error {
