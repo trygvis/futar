@@ -10,6 +10,7 @@ import (
 )
 
 var startupDelay int64 = 1000
+var healthzErrorRate int64 = 20
 
 var version = ""
 var date = ""
@@ -51,11 +52,20 @@ func main() {
 		}
 	}
 
+	healthzErrorRateS, _ := os.LookupEnv("HEALTHZ_ERROR_RATE")
+	if healthzErrorRateS != "" {
+		healthzErrorRate, err = strconv.ParseInt(healthzErrorRateS, 10, 64)
+		if err != nil {
+			return
+		}
+	}
+
 	e := echo.New()
 	server := FutarServer{
-		version:     v,
-		serviceName: "futar",
-		environment: env,
+		version:          v,
+		serviceName:      "futar",
+		environment:      env,
+		healthzErrorRate: healthzErrorRate,
 	}
 	RegisterHandlers(e, &server)
 

@@ -10,10 +10,7 @@ paths:
       operationId: HelloWorld
       responses:
         200:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HelloWorld"
+          description: Hello World
 
   /meta/ready:
     get:
@@ -57,13 +54,18 @@ paths:
               schema:
                 type: number
 
+  /meta/healthz:
+    get:
+      tags:
+        - meta
+      summary: ""
+      operationId: MetaHealthz
+      responses:
+        200:
+          description: Healthy
+
 components:
   schemas:
-    HelloWorld:
-      type: object
-      properties:
-        message:
-          type: string
     ServiceHealth:
       type: object
       properties:
