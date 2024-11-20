@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -61,11 +64,18 @@ func main() {
 	}
 
 	e := echo.New()
+
+	id := uuid.NewString()[:5]
+	var mu = new(sync.Mutex)
+	var cond = sync.NewCond(mu)
 	server := FutarServer{
 		version:          v,
-		serviceName:      "futar",
+		serviceName:      fmt.Sprintf("futar-%s", id),
 		environment:      env,
 		healthzErrorRate: healthzErrorRate,
+		ready:            false,
+		readyCond:        cond,
+		readyMutex:       mu,
 	}
 	RegisterHandlers(e, &server)
 

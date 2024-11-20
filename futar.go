@@ -1,45 +1,77 @@
 package main
 
 import (
+	"fmt"
 	"github.com/labstack/echo/v4"
 	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
+	"sync"
+	"time"
 )
-
-func getClientInfo(ctx echo.Context) string {
-	ip := ctx.Request().RemoteAddr
-	var b strings.Builder
-	b.WriteString("Request from ip: ")
-	b.WriteString(ip)
-	b.WriteString("\nHeaders: \n")
-	for key, value := range ctx.Request().Header {
-		b.WriteString(" - ")
-		b.WriteString(key)
-		b.WriteString(": ")
-		b.WriteString(value[0])
-		b.WriteString("\n")
-	}
-	return b.String()
-}
 
 type FutarServer struct {
 	version          string
 	environment      string
 	serviceName      string
 	healthzErrorRate int64
+	startTime        time.Time
 	ready            bool
+	readyCond        *sync.Cond
+	readyMutex       *sync.Mutex
+}
+
+func (d *FutarServer) getClientInfo(ctx echo.Context) string {
+	uptime := fmt.Sprintf("Uptime: %s", d.uptime())
+	if !d.ready {
+		uptime = ""
+	}
+	requestIp := fmt.Sprintf("Request from ip: %s", ctx.Request().RemoteAddr)
+
+	var headers []string
+	for key, value := range ctx.Request().Header {
+		headers = append(headers, fmt.Sprintf(" - %s: %s", key, value[0]))
+	}
+	slices.Sort(headers)
+	return fmt.Sprintf("[%s] %s\n%s\nHeaders: \n%s", d.serviceName, uptime, requestIp, strings.Join(headers[:], "\n"))
+}
+
+func (d *FutarServer) logEnv() {
+	env := os.Environ()
+	slices.Sort(env)
+	var b strings.Builder
+	b.WriteString("Environment variables:\n")
+	for _, val := range env {
+		b.WriteString("\t")
+		b.WriteString(val)
+		b.WriteString("\n")
+	}
+	b.WriteString("---\n\n")
+	log.Println(b.String())
+}
+
+func (d *FutarServer) uptime() string {
+	return time.Since(d.startTime).String()
 }
 
 func (d *FutarServer) markReady() {
-	slog.Info("Application is ready")
+	slog.Info(fmt.Sprintf("[%s] Application is ready", d.serviceName))
+
+	d.logEnv()
+	d.startTime = time.Now()
+
+	d.readyMutex.Lock()
+	defer d.readyMutex.Unlock()
 	d.ready = true
+	d.readyCond.Broadcast()
 }
 
 func (d *FutarServer) HelloWorld(c echo.Context) error {
-	ci := getClientInfo(c)
+	ci := d.getClientInfo(c)
 	println(ci)
 	return c.String(http.StatusOK, ci)
 }
@@ -64,15 +96,34 @@ func (d *FutarServer) MetaHealth(ctx echo.Context) error {
 }
 
 func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
-	ci := getClientInfo(ctx)
+	_, isSyncRequest := ctx.QueryParams()["sync"]
 
 	success := rand.Int64N(100) + 1
 	status := http.StatusOK
+	statusMessage := "OK"
 	if success <= d.healthzErrorRate {
+		statusMessage = "random error"
 		status = http.StatusInternalServerError
 	}
 
-	log.Printf("status: %d, %s", status, ci)
+	if isSyncRequest && !d.ready {
+		d.readyMutex.Lock()
+		defer d.readyMutex.Unlock()
+		for !d.ready {
+			ci := d.getClientInfo(ctx)
+			statusMessage = "waiting (sync)"
+			log.Printf("status: %s, %s", statusMessage, ci)
+			d.readyCond.Wait()
+			statusMessage = "ready (sync)"
+		}
+	}
+	if !d.ready {
+		statusMessage = "Not ready"
+		status = http.StatusServiceUnavailable
+	}
+
+	ci := d.getClientInfo(ctx)
+	log.Printf("status: %d %s, %s", status, statusMessage, ci)
 
 	return ctx.String(status, ci)
 }
