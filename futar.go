@@ -44,13 +44,12 @@ func (d *FutarServer) logEnv() {
 	env := os.Environ()
 	slices.Sort(env)
 	var b strings.Builder
-	b.WriteString("Environment variables:\n")
+	b.WriteString(fmt.Sprintf("[%s] Environment variables:\n", d.serviceName))
 	for _, val := range env {
 		b.WriteString("\t")
 		b.WriteString(val)
 		b.WriteString("\n")
 	}
-	b.WriteString("---\n\n")
 	log.Println(b.String())
 }
 
