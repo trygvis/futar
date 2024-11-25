@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/labstack/echo/v4"
-	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -40,19 +38,6 @@ func (d *FutarServer) getClientInfo(ctx echo.Context) string {
 	return fmt.Sprintf("[%s] %s\n%s\nHeaders: \n%s", d.serviceName, uptime, requestIp, strings.Join(headers[:], "\n"))
 }
 
-func (d *FutarServer) logEnv() {
-	env := os.Environ()
-	slices.Sort(env)
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[%s] Environment variables:\n", d.serviceName))
-	for _, val := range env {
-		b.WriteString("\t")
-		b.WriteString(val)
-		b.WriteString("\n")
-	}
-	log.Println(b.String())
-}
-
 func (d *FutarServer) uptime() string {
 	return time.Since(d.startTime).String()
 }
@@ -60,7 +45,6 @@ func (d *FutarServer) uptime() string {
 func (d *FutarServer) markReady() {
 	slog.Info(fmt.Sprintf("[%s] Application is ready", d.serviceName))
 
-	d.logEnv()
 	d.startTime = time.Now()
 
 	d.readyMutex.Lock()
@@ -111,7 +95,7 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 		for !d.ready {
 			ci := d.getClientInfo(ctx)
 			statusMessage = "waiting (sync)"
-			log.Printf("status: %s, %s", statusMessage, ci)
+			slog.Info("status: %s, %s", statusMessage, ci)
 			d.readyCond.Wait()
 			statusMessage = "ready (sync)"
 		}
@@ -122,7 +106,7 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 	}
 
 	ci := d.getClientInfo(ctx)
-	log.Printf("status: %d %s, %s", status, statusMessage, ci)
+	slog.Info("status: %d %s, %s", status, statusMessage, ci)
 
 	return ctx.String(status, ci)
 }

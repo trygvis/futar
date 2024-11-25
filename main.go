@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +40,12 @@ func main() {
 		}
 	}
 
+	logEnv()
+
 	var err error
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	port, _ := os.LookupEnv("PORT")
 	if port == "" {
 		port = "8080"
@@ -80,9 +89,37 @@ func main() {
 	RegisterHandlers(e, &server)
 
 	slog.Info("Application is starting")
+	slog.Info("Config", "startupDelay", startupDelay)
 	time.AfterFunc(time.Duration(startupDelay)*time.Millisecond, func() {
 		server.markReady()
 	})
 
-	e.Logger.Fatal(e.Start(":" + port))
+	srvErr := make(chan error, 1)
+	go func() {
+		srvErr <- e.Start(":" + port)
+	}()
+
+	select {
+	case err = <-srvErr:
+		return
+	case <-ctx.Done():
+		slog.Info("Stopping!")
+		stop()
+	}
+
+	err = e.Shutdown(context.Background())
+	return
+}
+
+func logEnv() {
+	env := os.Environ()
+	slices.Sort(env)
+	var b strings.Builder
+	b.WriteString("Environment variables:\b")
+	for _, val := range env {
+		b.WriteString("\t")
+		b.WriteString(val)
+		b.WriteString("\n")
+	}
+	slog.Info(b.String())
 }
