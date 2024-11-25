@@ -55,8 +55,8 @@ func (d *FutarServer) markReady() {
 
 func (d *FutarServer) HelloWorld(c echo.Context) error {
 	ci := d.getClientInfo(c)
-	println(ci)
-	return c.String(http.StatusOK, ci)
+	slog.Info(ci)
+	return c.String(http.StatusOK, ci+"\n")
 }
 
 func (d *FutarServer) MetaHealth(ctx echo.Context) error {
@@ -108,7 +108,7 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 	ci := d.getClientInfo(ctx)
 	slog.Info("status: %d %s, %s", status, statusMessage, ci)
 
-	return ctx.String(status, ci)
+	return ctx.String(status, ci+"\n")
 }
 
 func (d *FutarServer) MetaReady(ctx echo.Context) error {
