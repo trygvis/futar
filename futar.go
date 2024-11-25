@@ -15,7 +15,7 @@ import (
 type FutarServer struct {
 	version          string
 	environment      string
-	serviceName      string
+	instanceId       string
 	healthzErrorRate int64
 	startTime        time.Time
 	ready            bool
@@ -35,7 +35,7 @@ func (d *FutarServer) getClientInfo(ctx echo.Context) string {
 		headers = append(headers, fmt.Sprintf(" - %s: %s", key, value[0]))
 	}
 	slices.Sort(headers)
-	return fmt.Sprintf("[%s] %s\n%s\nHeaders: \n%s", d.serviceName, uptime, requestIp, strings.Join(headers[:], "\n"))
+	return fmt.Sprintf("%s\n%s\nHeaders: \n%s", uptime, requestIp, strings.Join(headers[:], "\n"))
 }
 
 func (d *FutarServer) uptime() string {
@@ -43,7 +43,7 @@ func (d *FutarServer) uptime() string {
 }
 
 func (d *FutarServer) markReady() {
-	slog.Info(fmt.Sprintf("[%s] Application is ready", d.serviceName))
+	slog.Info("Application is ready", "instanceId", d.instanceId)
 
 	d.startTime = time.Now()
 
@@ -74,7 +74,7 @@ func (d *FutarServer) MetaHealth(ctx echo.Context) error {
 	return ctx.JSONPretty(200, ServiceHealth{
 		Checks:          &checks,
 		EnvironmentName: &d.environment,
-		ServiceName:     &d.serviceName,
+		ServiceName:     &d.instanceId,
 	}, "  ")
 }
 

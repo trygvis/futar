@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/labstack/echo/v4/middleware"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -15,11 +19,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	_ "go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 var startupDelay int64 = 1000
 var healthzErrorRate int64 = 20
+
+const prettyPrintOtel = true
+const serviceName = "futar"
 
 var version = ""
 var date = ""
@@ -42,20 +48,33 @@ func main() {
 		}
 	}
 
+	instanceId := uuid.NewString()[:5]
+
 	var err error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	//metricDuration := 3 * time.Second
-	metricDuration := 1 * time.Minute
+	aiConnectionString, _ := os.LookupEnv("APPLICATIONINSIGHTS_CONNECTION_STRING")
+	otelEnabled := strings.TrimSpace(aiConnectionString) != ""
 
-	otelShutdown, err := setupOtelSDK(ctx, metricDuration)
-	if err != nil {
-		return
+	if otelEnabled {
+		//metricDuration := 3 * time.Second
+		metricDuration := 1 * time.Minute
+
+		var otelSetup OtelSetup
+
+		otelSetup, err = setupOtelSDK(serviceName, v, instanceId, prettyPrintOtel, ctx, metricDuration)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer func() {
+			err = errors.Join(err, otelSetup.shutdown(context.Background()))
+		}()
+
+		// Connect slog to otel
+		slogLogger := otelslog.NewLogger("futar", otelslog.WithLoggerProvider(otelSetup.loggerProvider))
+		slog.SetDefault(slogLogger)
 	}
-	defer func() {
-		err = errors.Join(err, otelShutdown(context.Background()))
-	}()
 
 	logEnv()
 
@@ -86,13 +105,18 @@ func main() {
 	}
 
 	e := echo.New()
+	e.HideBanner = true
+	if otelEnabled {
+		e.Use(otelecho.Middleware(serviceName))
+	} else {
+		e.Use(middleware.Logger())
+	}
 
-	id := uuid.NewString()[:5]
 	var mu = new(sync.Mutex)
 	var cond = sync.NewCond(mu)
 	server := FutarServer{
 		version:          v,
-		serviceName:      fmt.Sprintf("futar-%s", id),
+		instanceId:       fmt.Sprintf("futar-%s", instanceId),
 		environment:      env,
 		healthzErrorRate: healthzErrorRate,
 		ready:            false,

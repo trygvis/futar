@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -12,20 +12,26 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"log/slog"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"time"
 )
 
+type OtelSetup struct {
+	shutdown       func(context.Context) error
+	loggerProvider *log.LoggerProvider
+}
+
 // setupOtelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func setupOtelSDK(ctx context.Context, metricInterval time.Duration) (shutdown func(context.Context) error, err error) {
+func setupOtelSDK(serviceName, serviceVersion, instanceId string, prettyPrint bool, ctx context.Context, metricInterval time.Duration) (setup OtelSetup, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	// shutdown calls cleanup functions registered via shutdownFuncs.
 	// The errors from the calls are joined.
 	// Each registered cleanup will be invoked once.
-	shutdown = func(ctx context.Context) error {
+	setup.shutdown = func(ctx context.Context) error {
 		var err error
 		for _, fn := range shutdownFuncs {
 			err = errors.Join(err, fn(ctx))
@@ -36,7 +42,26 @@ func setupOtelSDK(ctx context.Context, metricInterval time.Duration) (shutdown f
 
 	// handleErr calls shutdown for cleanup and makes sure that all errors are returned.
 	handleErr := func(inErr error) {
-		err = errors.Join(inErr, shutdown(ctx))
+		err = errors.Join(inErr, setup.shutdown(ctx))
+	}
+
+	var attrs []attribute.KeyValue
+
+	if serviceName != "" {
+		attrs = append(attrs, semconv.ServiceName(serviceName))
+	}
+	if serviceVersion != "" {
+		attrs = append(attrs, semconv.ServiceVersion(serviceVersion))
+	}
+	if instanceId != "" {
+		attrs = append(attrs, semconv.ServiceInstanceID(instanceId))
+	}
+
+	res, err := resource.Merge(resource.Default(),
+		resource.NewWithAttributes(semconv.SchemaURL, attrs...),
+	)
+	if err != nil {
+		return
 	}
 
 	// Set up propagator.
@@ -44,7 +69,7 @@ func setupOtelSDK(ctx context.Context, metricInterval time.Duration) (shutdown f
 	otel.SetTextMapPropagator(prop)
 
 	// Set up trace provider.
-	tracerProvider, err := newTraceProvider()
+	tracerProvider, err := newTraceProvider(prettyPrint, res)
 	if err != nil {
 		handleErr(err)
 		return
@@ -53,7 +78,7 @@ func setupOtelSDK(ctx context.Context, metricInterval time.Duration) (shutdown f
 	otel.SetTracerProvider(tracerProvider)
 
 	// Set up meter provider.
-	meterProvider, err := newMeterProvider(metricInterval)
+	meterProvider, err := newMeterProvider(prettyPrint, res, metricInterval)
 	if err != nil {
 		handleErr(err)
 		return
@@ -62,16 +87,13 @@ func setupOtelSDK(ctx context.Context, metricInterval time.Duration) (shutdown f
 	otel.SetMeterProvider(meterProvider)
 
 	// Set up logger provider.
-	loggerProvider, err := newLoggerProvider()
+	setup.loggerProvider, err = newLoggerProvider(prettyPrint, res)
 	if err != nil {
 		handleErr(err)
 		return
 	}
-	shutdownFuncs = append(shutdownFuncs, loggerProvider.Shutdown)
-	global.SetLoggerProvider(loggerProvider)
-
-	slogLogger := otelslog.NewLogger("futar", otelslog.WithLoggerProvider(loggerProvider))
-	slog.SetDefault(slogLogger)
+	shutdownFuncs = append(shutdownFuncs, setup.loggerProvider.Shutdown)
+	global.SetLoggerProvider(setup.loggerProvider)
 
 	return
 }
@@ -83,9 +105,13 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTraceProvider() (*trace.TracerProvider, error) {
-	traceExporter, err := stdouttrace.New(
-		stdouttrace.WithPrettyPrint())
+func newTraceProvider(prettyPrint bool, res *resource.Resource) (*trace.TracerProvider, error) {
+	var opts []stdouttrace.Option
+	if prettyPrint {
+		opts = append(opts, stdouttrace.WithPrettyPrint())
+	}
+
+	traceExporter, err := stdouttrace.New(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,12 +120,18 @@ func newTraceProvider() (*trace.TracerProvider, error) {
 		trace.WithBatcher(traceExporter,
 			// Default is 5s. Set to 1s for demonstrative purposes.
 			trace.WithBatchTimeout(time.Second)),
+		trace.WithResource(res),
 	)
 	return traceProvider, nil
 }
 
-func newMeterProvider(metricInterval time.Duration) (*metric.MeterProvider, error) {
-	metricExporter, err := stdoutmetric.New()
+func newMeterProvider(prettyPrint bool, res *resource.Resource, metricInterval time.Duration) (*metric.MeterProvider, error) {
+	var opts []stdoutmetric.Option
+	if prettyPrint {
+		opts = append(opts, stdoutmetric.WithPrettyPrint())
+	}
+
+	metricExporter, err := stdoutmetric.New(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -108,18 +140,25 @@ func newMeterProvider(metricInterval time.Duration) (*metric.MeterProvider, erro
 		metric.WithReader(metric.NewPeriodicReader(metricExporter,
 			// Default is 1m. Set to 3s for demonstrative purposes.
 			metric.WithInterval(metricInterval))),
+		metric.WithResource(res),
 	)
 	return meterProvider, nil
 }
 
-func newLoggerProvider() (*log.LoggerProvider, error) {
-	logExporter, err := stdoutlog.New()
+func newLoggerProvider(prettyPrint bool, res *resource.Resource) (*log.LoggerProvider, error) {
+	var opts []stdoutlog.Option
+	if prettyPrint {
+		opts = append(opts, stdoutlog.WithPrettyPrint())
+	}
+
+	logExporter, err := stdoutlog.New(opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	loggerProvider := log.NewLoggerProvider(
 		log.WithProcessor(log.NewBatchProcessor(logExporter)),
+		log.WithResource(res),
 	)
 	return loggerProvider, nil
 }
