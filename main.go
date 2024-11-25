@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	_ "go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 var startupDelay int64 = 1000
@@ -40,11 +42,22 @@ func main() {
 		}
 	}
 
-	logEnv()
-
 	var err error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	//metricDuration := 3 * time.Second
+	metricDuration := 1 * time.Minute
+
+	otelShutdown, err := setupOtelSDK(ctx, metricDuration)
+	if err != nil {
+		return
+	}
+	defer func() {
+		err = errors.Join(err, otelShutdown(context.Background()))
+	}()
+
+	logEnv()
 
 	port, _ := os.LookupEnv("PORT")
 	if port == "" {
