@@ -5,6 +5,9 @@ import (
 	"errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -17,6 +20,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"time"
 )
+
+const useStdout = false
 
 type OtelSetup struct {
 	shutdown       func(context.Context) error
@@ -69,7 +74,7 @@ func setupOtelSDK(serviceName, serviceVersion, instanceId string, prettyPrint bo
 	otel.SetTextMapPropagator(prop)
 
 	// Set up trace provider.
-	tracerProvider, err := newTraceProvider(prettyPrint, res)
+	tracerProvider, err := newTraceProvider(prettyPrint, ctx, res)
 	if err != nil {
 		handleErr(err)
 		return
@@ -78,7 +83,7 @@ func setupOtelSDK(serviceName, serviceVersion, instanceId string, prettyPrint bo
 	otel.SetTracerProvider(tracerProvider)
 
 	// Set up meter provider.
-	meterProvider, err := newMeterProvider(prettyPrint, res, metricInterval)
+	meterProvider, err := newMeterProvider(prettyPrint, ctx, res, metricInterval)
 	if err != nil {
 		handleErr(err)
 		return
@@ -87,7 +92,7 @@ func setupOtelSDK(serviceName, serviceVersion, instanceId string, prettyPrint bo
 	otel.SetMeterProvider(meterProvider)
 
 	// Set up logger provider.
-	setup.loggerProvider, err = newLoggerProvider(prettyPrint, res)
+	setup.loggerProvider, err = newLoggerProvider(prettyPrint, ctx, res)
 	if err != nil {
 		handleErr(err)
 		return
@@ -105,13 +110,20 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTraceProvider(prettyPrint bool, res *resource.Resource) (*trace.TracerProvider, error) {
-	var opts []stdouttrace.Option
-	if prettyPrint {
-		opts = append(opts, stdouttrace.WithPrettyPrint())
-	}
+func newTraceProvider(prettyPrint bool, ctx context.Context, res *resource.Resource) (*trace.TracerProvider, error) {
+	var traceExporter trace.SpanExporter
+	var err error
 
-	traceExporter, err := stdouttrace.New(opts...)
+	if useStdout {
+		var opts []stdouttrace.Option
+		if prettyPrint {
+			opts = append(opts, stdouttrace.WithPrettyPrint())
+		}
+
+		traceExporter, err = stdouttrace.New(opts...)
+	} else {
+		traceExporter, err = otlptracehttp.New(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -125,13 +137,20 @@ func newTraceProvider(prettyPrint bool, res *resource.Resource) (*trace.TracerPr
 	return traceProvider, nil
 }
 
-func newMeterProvider(prettyPrint bool, res *resource.Resource, metricInterval time.Duration) (*metric.MeterProvider, error) {
-	var opts []stdoutmetric.Option
-	if prettyPrint {
-		opts = append(opts, stdoutmetric.WithPrettyPrint())
-	}
+func newMeterProvider(prettyPrint bool, ctx context.Context, res *resource.Resource, metricInterval time.Duration) (*metric.MeterProvider, error) {
+	var metricExporter metric.Exporter
+	var err error
 
-	metricExporter, err := stdoutmetric.New(opts...)
+	if useStdout {
+		var opts []stdoutmetric.Option
+		if prettyPrint {
+			opts = append(opts, stdoutmetric.WithPrettyPrint())
+		}
+
+		metricExporter, err = stdoutmetric.New(opts...)
+	} else {
+		metricExporter, err = otlpmetrichttp.New(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +164,22 @@ func newMeterProvider(prettyPrint bool, res *resource.Resource, metricInterval t
 	return meterProvider, nil
 }
 
-func newLoggerProvider(prettyPrint bool, res *resource.Resource) (*log.LoggerProvider, error) {
-	var opts []stdoutlog.Option
-	if prettyPrint {
-		opts = append(opts, stdoutlog.WithPrettyPrint())
+func newLoggerProvider(prettyPrint bool, ctx context.Context, res *resource.Resource) (*log.LoggerProvider, error) {
+	var logExporter log.Exporter
+	var err error
+
+	if useStdout {
+		var opts []stdoutlog.Option
+		if prettyPrint {
+			opts = append(opts, stdoutlog.WithPrettyPrint())
+		}
+
+		logExporter, err = stdoutlog.New(opts...)
+	} else {
+		var opts []otlploghttp.Option
+		logExporter, err = otlploghttp.New(ctx, opts...)
 	}
 
-	logExporter, err := stdoutlog.New(opts...)
 	if err != nil {
 		return nil, err
 	}
