@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 
-FROM golang:1.22.0 as builder
+FROM golang:1.23.3 as builder
 
 COPY bin/* ./bin/
 RUN bin/oapi-codegen --version
