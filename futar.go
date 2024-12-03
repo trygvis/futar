@@ -95,8 +95,25 @@ func (d *FutarServer) MetaHealth(ctx echo.Context) error {
 }
 
 func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
-	_, isSyncRequest := ctx.QueryParams()["sync"]
+	success := rand.Int64N(100) + 1
+	status := http.StatusOK
+	statusMessage := "OK"
+	if success <= d.healthzErrorRate {
+		statusMessage = "random error"
+		status = http.StatusInternalServerError
+	}
+	if !d.ready {
+		statusMessage = "Not ready"
+		status = http.StatusServiceUnavailable
+	}
 
+	ci := d.getClientInfo(ctx)
+	log.Printf("status: %d %s, %s", status, statusMessage, ci)
+
+	return ctx.String(status, ci)
+}
+
+func (d *FutarServer) MetaAppServiceWarmup(ctx echo.Context) error {
 	success := rand.Int64N(100) + 1
 	status := http.StatusOK
 	statusMessage := "OK"
@@ -105,7 +122,7 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 		status = http.StatusInternalServerError
 	}
 
-	if isSyncRequest && !d.ready {
+	if !d.ready {
 		d.readyMutex.Lock()
 		defer d.readyMutex.Unlock()
 		for !d.ready {
@@ -115,10 +132,6 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 			d.readyCond.Wait()
 			statusMessage = "ready (sync)"
 		}
-	}
-	if !d.ready {
-		statusMessage = "Not ready"
-		status = http.StatusServiceUnavailable
 	}
 
 	ci := d.getClientInfo(ctx)

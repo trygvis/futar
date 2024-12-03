@@ -12,7 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-var startupDelay int64 = 1000
+var startupDelay int64 = 10000
 var healthzErrorRate int64 = 20
 
 var version = ""

@@ -63,6 +63,22 @@ paths:
       responses:
         200:
           description: Healthy
+        500:
+          description: Unhealthy
+        503:
+          description: Service is unavailable
+
+  /meta/app-service-warmup:
+    get:
+      tags:
+        - meta
+      summary: ""
+      operationId: MetaAppServiceWarmup
+      responses:
+        200:
+          description: Healthy
+        500:
+          description: Unhealthy
 
 components:
   schemas:
