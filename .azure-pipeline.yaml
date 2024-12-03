@@ -19,7 +19,7 @@ steps:
         echo "##vso[task.setvariable variable=timestamp]$timestamp"
   - task: GoTool@0
     inputs:
-      version: '1.22.0'
+      version: '1.23.3'
   - task: Go@0
     inputs:
       workingDirectory: '$(System.DefaultWorkingDirectory)'

@@ -1,7 +1,12 @@
+DATE_CMD := $(shell date -Iminutes)
+BUILD_ROOT ?= .
+
 all: futar
 
 futar: $(wildcard *.go) gen
-	go build
+	go build \
+		-o $(BUILD_ROOT)/futar \
+		-ldflags "-X main.date=$(DATE_CMD) -X main.version=${TRINFRA_VERSION} -X main.commit=$(shell git rev-parse --short HEAD)"
 
 .PHONY: gen
 gen: server-api.gen.go

@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/labstack/echo/v4"
-	"log"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -17,7 +15,7 @@ import (
 type FutarServer struct {
 	version          string
 	environment      string
-	serviceName      string
+	instanceId       string
 	healthzErrorRate int64
 	startTime        time.Time
 	ready            bool
@@ -37,20 +35,7 @@ func (d *FutarServer) getClientInfo(ctx echo.Context) string {
 		headers = append(headers, fmt.Sprintf(" - %s: %s", key, value[0]))
 	}
 	slices.Sort(headers)
-	return fmt.Sprintf("[%s] %s\n%s\nHeaders: \n%s", d.serviceName, uptime, requestIp, strings.Join(headers[:], "\n"))
-}
-
-func (d *FutarServer) logEnv() {
-	env := os.Environ()
-	slices.Sort(env)
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[%s] Environment variables:\n", d.serviceName))
-	for _, val := range env {
-		b.WriteString("\t")
-		b.WriteString(val)
-		b.WriteString("\n")
-	}
-	log.Println(b.String())
+	return fmt.Sprintf("%s\n%s\nHeaders: \n%s", uptime, requestIp, strings.Join(headers[:], "\n"))
 }
 
 func (d *FutarServer) uptime() string {
@@ -58,9 +43,8 @@ func (d *FutarServer) uptime() string {
 }
 
 func (d *FutarServer) markReady() {
-	slog.Info(fmt.Sprintf("[%s] Application is ready", d.serviceName))
+	slog.Info("Application is ready", "instanceId", d.instanceId)
 
-	d.logEnv()
 	d.startTime = time.Now()
 
 	d.readyMutex.Lock()
@@ -71,8 +55,8 @@ func (d *FutarServer) markReady() {
 
 func (d *FutarServer) HelloWorld(c echo.Context) error {
 	ci := d.getClientInfo(c)
-	println(ci)
-	return c.String(http.StatusOK, ci)
+	slog.Info(ci)
+	return c.String(http.StatusOK, ci+"\n")
 }
 
 func (d *FutarServer) MetaHealth(ctx echo.Context) error {
@@ -90,7 +74,7 @@ func (d *FutarServer) MetaHealth(ctx echo.Context) error {
 	return ctx.JSONPretty(200, ServiceHealth{
 		Checks:          &checks,
 		EnvironmentName: &d.environment,
-		ServiceName:     &d.serviceName,
+		ServiceName:     &d.instanceId,
 	}, "  ")
 }
 
@@ -128,16 +112,16 @@ func (d *FutarServer) MetaAppServiceWarmup(ctx echo.Context) error {
 		for !d.ready {
 			ci := d.getClientInfo(ctx)
 			statusMessage = "waiting (sync)"
-			log.Printf("status: %s, %s", statusMessage, ci)
+			slog.Info("status: %s, %s", statusMessage, ci)
 			d.readyCond.Wait()
 			statusMessage = "ready (sync)"
 		}
 	}
 
 	ci := d.getClientInfo(ctx)
-	log.Printf("status: %d %s, %s", status, statusMessage, ci)
+	slog.Info("status: %d %s, %s", status, statusMessage, ci)
 
-	return ctx.String(status, ci)
+	return ctx.String(status, ci+"\n")
 }
 
 func (d *FutarServer) MetaReady(ctx echo.Context) error {
