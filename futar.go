@@ -92,7 +92,7 @@ func (d *FutarServer) MetaHealthz(ctx echo.Context) error {
 	}
 
 	ci := d.getClientInfo(ctx)
-	log.Printf("status: %d %s, %s", status, statusMessage, ci)
+	slog.Info("status: %d %s, %s", status, statusMessage, ci)
 
 	return ctx.String(status, ci)
 }
